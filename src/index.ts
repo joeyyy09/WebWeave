@@ -4,7 +4,10 @@ import {generate} from '../utils/generate';
 import simpleGit from 'simple-git';
 import { getAllFiles } from '../utils/getAllFiles';
 import { uploadFile } from '../utils/uploadFile';
+import { createClient } from "redis";
 
+const publisher = createClient();
+publisher.connect();
 
 const app = express();
 const port = 3000;
@@ -29,6 +32,8 @@ app.post('/deploy', async (req, res) => {
       await uploadFile(file.slice(__dirname.length + 1), file);
     } )  
     console.log(files);
+
+    publisher.lPush("build-queue", id);
 });
 
 
