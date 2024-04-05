@@ -56,3 +56,59 @@ export async function downloadS3Folder(prefix: string) {
   // Waiting for all download promises to resolve
   await Promise.all(allPromises?.filter((x) => x !== undefined));
 }
+
+// Function to copy files from local directory to S3 bucket
+export function copyFinalDist(id: string) {
+  // Constructing the local folder path
+  const folderPath = path.join(__dirname, `output/${id}/dist`);
+  
+  // Getting all files recursively from the specified folder path
+  const allFiles = getAllFiles(folderPath);
+  
+  // Uploading each file to S3
+  allFiles.forEach((file) => {
+    uploadFile(`dist/${id}/` + file.slice(folderPath.length + 1), file);
+  });
+}
+
+// Function to recursively get all files in a directory
+const getAllFiles = (folderPath: string) => {
+  let response: string[] = [];
+
+  // Getting all files and folders in the specified directory
+  const allFilesAndFolders = fs.readdirSync(folderPath);
+  
+  // Iterating over each file/folder
+  allFilesAndFolders.forEach((file) => {
+    const fullFilePath = path.join(folderPath, file);
+    
+    // Checking if the current item is a directory
+    if (fs.statSync(fullFilePath).isDirectory()) {
+      // If it's a directory, recursively call getAllFiles to get files inside it
+      response = response.concat(getAllFiles(fullFilePath));
+    } else {
+      // If it's a file, add its full path to the response array
+      response.push(fullFilePath);
+    }
+  });
+  return response;
+};
+
+// Function to upload a file to S3 bucket
+const uploadFile = async (fileName: string, localFilePath: string) => {
+  // Reading file content from local file
+  const fileContent = fs.readFileSync(localFilePath);
+  
+  // Uploading file content to S3 bucket
+  const response = await s3
+    .upload({
+      Body: fileContent,
+      Bucket: "vercel",
+      Key: fileName,
+    })
+    .promise();
+  
+  // Logging the response from S3
+  console.log(response);
+};
+
