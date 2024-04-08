@@ -5,40 +5,48 @@ import simpleGit from 'simple-git';
 import { getAllFiles } from '../utils/getAllFiles';
 import { uploadFile } from '../utils/uploadFile';
 import { createClient } from "redis";
+import path from "path";
+
 
 const publisher = createClient();
 publisher.connect();
 
-const app = express();
-const port = 3000;
+const subscriber = createClient();
+subscriber.connect();
 
+const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.get('/', (req, res) => {
-  res.send('Hello World!');
+app.post("/deploy", async (req, res) => {
+  const repoUrl = req.body.repoUrl;
+  const id = generate(); // asd12
+  await simpleGit().clone(repoUrl, path.join(__dirname, `output/${id}`));
+
+  const files = getAllFiles(path.join(__dirname, `output/${id}`));
+
+  files.forEach(async (file) => {
+    await uploadFile(file.slice(__dirname.length + 1), file);
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 5000));
+  publisher.lPush("build-queue", id);
+  // INSERT => SQL
+  // .create =>
+  publisher.hSet("status", id, "uploaded");
+
+  res.json({
+    id: id,
+  });
 });
 
-app.post('/deploy', async (req, res) => {
-    const repoUrl = req.body.repoUrl;
-    console.log(repoUrl);
-    const id = generate();
-    await simpleGit().clone(repoUrl, `output/${id}`);
-    res.json({id: id});
-
-    const files = getAllFiles(`output/${id}`)
-    files.forEach(async file => {
-      console.log(file);
-      await uploadFile(file.slice(__dirname.length + 1), file);
-    } )  
-    console.log(files);
-
-    publisher.lPush("build-queue", id);
+app.get("/status", async (req, res) => {
+  const id = req.query.id;
+  const response = await subscriber.hGet("status", id as string);
+  res.json({
+    status: response,
+  });
 });
 
-
-
-app.listen(port, () => {
-  console.log(`App listening at http://localhost:${port}`);
-});
+app.listen(3000);
 
